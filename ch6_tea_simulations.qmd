@@ -1,7 +1,7 @@
 ---
 title: "Inference Simulations"
 subtitle: "PSYC 201A, Simulation Lab 2"
-author: "Your name here"
+author: Fei Xu
 date: today
 format:
   html:
@@ -73,12 +73,15 @@ make_tea_data <- function(n_total = 48,
 ```{r}
 # here, we're calling our custom function, and specifying different inputs than the defaults (which are inside the parentheses up above)
 tea_data <- make_tea_data(n_total = 18, delta = .5)
+
+tea_data
 ```
 
 Now, make a new data frame (call it `tea_data_highn`) with an N of 48, or something higher if you want. You need to call the custom function. Keep the same small effect (`delta = .5`): we come back to this experiment in Parts 2 and 3.
 
 ```{r}
-
+tea_data_highn <- make_tea_data(n_total = 48, delta = .5)
+tea_data_highn
 ```
 
 To do: OK, look at these data. How long are they, what are the column names? Look at them in your console by copy and pasting the variable names into R.
@@ -88,8 +91,17 @@ Call `summary(tea_data)` and look at the outputs. Call `head(tea_data)` to look 
 To do: Write basic tidyverse code to calculate the mean of each condition (hint: use `group_by` and `summarize`).
 
 ```{r}
+summary(tea_data)
+head(tea_data)
+summary(tea_data_highn)
 
- 
+tea_data %>%
+  group_by(condition) %>%
+  summarise(mean = mean(rating))
+
+tea_data_highn %>%
+  group_by(condition) %>%
+  summarise(mean = mean(rating))
 ```
 
 ## In this first draw, was it significant with N=9 or N=24 per group?
@@ -108,6 +120,11 @@ out_low_n <- tea_data %>%
 
 out_high_n <- tea_data_highn %>%
   t.test(rating ~ condition, data = ., var.equal = TRUE) 
+
+out_low_n
+out_high_n
+
+# We did not find a significant difference between milk first and tea first group (t(46) = 1.92, p = .061).
 ```
 
 ### Simulate 1000 experiments
@@ -125,7 +142,9 @@ samps <- tibble(sim = 1:1000) |>
 OK, copy this but now change it so that you 48 participants per experiment
 
 ```{r}
-samps_highn <-...
+samps_highn <-tibble(sim = 1:1000) |> 
+  mutate(data = map(sim, \(i) make_tea_data(n_total = 48, delta = 1.5))) |>
+  unnest(cols = data)
 ```
 
 ### Summarize both of these simulations
@@ -141,10 +160,12 @@ Bonus: Figure out a way to do this that is better than I what I did (some mix of
 ```{r}
 tea_data_summary <- samps |>
   group_by(sim, condition) |> 
-  summarise(mean_rating = mean(rating)) |> 
+  summarise(mean_rating = mean(rating)) |>  # get the mean for each group
   group_by(sim) |> 
   summarise(delta = mean_rating[condition == "milk first"] -
-              mean_rating[condition == "tea first"])
+              mean_rating[condition == "tea first"]) # get the mean difference between the group
+
+tea_data_summary
 ```
 
 ```{r}
@@ -161,7 +182,8 @@ tea_data_highn_summary <- samps_highn |>
 Let's make a plot to plot the differences in ratings across conditions for the low-n condition. You'll need to use ggplot or `hist`
 
 ```{r}
-
+ggplot(tea_data_summary, aes(x = delta)) +
+  geom_histogram()
 ```
 
 ### Plot difference for higher-n
@@ -169,7 +191,8 @@ Let's make a plot to plot the differences in ratings across conditions for the l
 To do: What's different about this distribution vs the one we just plotted?
 
 ```{r}
-
+ggplot(tea_data_highn_summary, aes(x = delta)) +
+  geom_histogram()
 ```
 
 **Bonus** What happens if you run it again, but this time try changing the variance / mean of the effect when you change the `delta` and `sigma` values in the data simulation.
@@ -188,13 +211,25 @@ Call the simulated experiments `null_model` and use 18 participants per experime
 
 ```{r}
 # Simulate the null distribution
-  
+null_model <- tibble(sim = 1:1000) |> 
+  mutate(data = map(sim, \(i) make_tea_data(n_total = 18, delta = 0))) |>
+  unnest(cols = data)
+
+null_model_summary <- null_model |>
+  group_by(sim, condition) |> 
+  summarise(mean_rating = mean(rating)) |>
+  group_by(sim) |> 
+  summarise(delta = mean_rating[condition == "milk first"] -
+              mean_rating[condition == "tea first"])
+
+null_model_summary
 ```
 
 Visualize what this null distribution actually looks like.
 
 ```{r}
-
+ggplot(null_model_summary, aes(x = delta)) +
+  geom_histogram()
 ```
 
 ### Method 2: Shuffling
@@ -482,7 +517,9 @@ How often did we fail to reject the null hypothesis? When was our p-value greate
 
 ```{r}
 # you'll need all_results_high_n$pvalue
+hist(all_results_high_n$pvalue)
 
+mean(all_results_high_n$pvalue >= .05)
 ```
 
 # Part 5: Power curves
@@ -506,8 +543,8 @@ Check your function: `estimate_power(48, 1.5)` should be close to 1 minus the mi
 
 ```{r}
 estimate_power <- function(n_total, delta, n_sims = 500) {
-  # your code here
-  
+  p_values <- map_dbl(1:n_sims, \(i) run_one_experiment(n_total, delta))
+  mean(p_values < .05)
 }
 
 estimate_power(n_total = 48, delta = 1.5)
@@ -525,14 +562,19 @@ power_curve <- expand_grid(n_total = seq(10, 100, by = 10), # total participants
 To do: Plot the power curves: `n_total` on the x-axis, `power` on the y-axis, and one line per `delta` (hint: `color = factor(delta)`). Add a dashed horizontal line at .8, the conventional target for power (hint: `geom_hline()`).
 
 ```{r}
-
+ggplot(power_curve, aes(x = n_total, y = power, color = factor(delta))) +
+  geom_line() +
+  geom_hline(yintercept = .8)
 ```
 
 To do: Answer these questions.
 
 1.  What is "power" when delta = 0? Why doesn't it go up with more participants?
+## 0
 2.  About how many participants do you need for 80% power when delta = 1? When delta = 0.5?
+## around 52 for delta = 1, and > 100 when delta = 0.5
 3.  In Part 1, `tea_data` had 18 participants and a true effect of delta = 0.5. About what was its power? If that one experiment had come out significant, how much would you trust it?
+## power is approximately 0.12. If the experiment come out significant, I won't trust it much
 
 **Bonus** Extend `n_total` until delta = 0.5 reaches 80% power. How many participants does it take?
 
